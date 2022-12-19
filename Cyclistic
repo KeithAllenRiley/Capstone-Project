@@ -1,0 +1,219 @@
+Business Task:
+Cyclistic is a Chicago based company that offers bike-sharing options for local customers. The stakeholders are interested in learning more about how 
+customers use their products. The primary questions this analysis will answer are as follows: How do annual members and casual riders use Cyclistic 
+bikes differently? Why would casual riders buy Cyclistic annual memberships? How can Cyclistic use digital media to influence casual riders to become 
+members? 
+
+Data sources used:
+Cyclistic has provided the data for this analysis. The data is organized as 12 separate CSV files. This will be historical data over a 12-month period. 
+Since the information is derived directly from the company the data likely meets the ROCCC (reliable, original, comprehensive, current, and cited) 
+standards. It has been determined that this is public data to use for this capstone project and has been deidentified to protect customers private 
+information. Saving the data on a local computer will keep the data private. Based on the size of the data SQLite will be used primary to analyze the 
+data with minimal excel functions used. 
+
+Cleaning/Manipulation of data:
+Opening the data in excel it is clear by the volume of data that other tools will need to be used in order to process the data.  While using excel two 
+additional columns will be created titled duration and day of week. The data lists the date and time of the initial pick up of a bike and the drop-off 
+date and time. By subtracting the pick-up time from the drop-off time will produce the duration of the bike rental. Some basic cell formatting will be 
+completed to list the duration time. Using a =TEXT(cell, “dddd”) function outputs the day of the week the bike was rented on which will be stored in 
+another column. These metrics along with the bike type rented, start station name, and end station name will be used to determine customer trends while 
+comparing members and casual users. Twelve CSV files were compiled to SQLite. Multiple queries were used to understand the data properties and determine
+the consistency and quality of the data. These included:
+
+/*
+
+ALTER TABLE td
+ALTER COLUMN duration REAL;
+##This creates a new column. 
+
+UPDATE td
+SET duration = (julianday(ended_at) - julianday(started_at)) * 1440;
+##This inputs the values into the new column. 
+
+SELECT DISTINCT member_casual
+FROM dt;
+
+SELECT DISTINCT day_of_week
+FROM dt;
+
+SELECT DISTINCT rideable_type
+FROM dt;
+
+SELECT MIN(end_lng), MAX(end_lng), MIN(end_lat), MAX(end_lat), MIN(start_lng), MAX(start_lng), MIN(start_lat), MAX(start_lat)
+FROM dt;
+
+SELECT member_casual, COUNT(*)
+FROM dt
+GROUP BY member_casual;
+##Lists member_causal values. No null values found. 
+
+SELECT rideable_type, COUNT(*)
+FROM dt
+GROUP BY rideable_type;
+##Lists current bike types. No null values found. 
+
+SELECT start_station_id, COUNT(*)
+FROM dt
+GROUP BY start_station_id;
+##Multiple null values for start_station_id. 
+
+SELECT start_station_name, COUNT(*)
+FROM dt
+GROUP BY start_station_name;
+##Multiple null values for start_station_name. 
+
+SELECT *
+FROM dt
+WHERE start_lat IS NULL OR start_lng IS NULL OR end_lat IS NULL OR end_lng IS NULL
+##Resulted in 5835 null values
+
+SELECT *, COUNT(*)
+FROM dt
+GROUP BY ride_id
+HAVING COUNT(*) > 1;
+##Determined there to be 16 instances of duplicate ride_id data. Row data appeared to be all unique so it is assumed that the data is consistent and can be used. 
+
+SELECT MAX(duration), MIN(duration)
+FROM dt;
+##Determined that there are negative values in the duration column.
+SELECT duration		 
+FROM dt
+WHERE duration <=0
+##Determined that 112 instances of drop-off times before pick-up times. These will be excluded to prevent errors in the analysis phase. 
+
+UPDATE dt
+SET duration = 0
+WHERE duration <= 0
+##This updated 112 instances to zero to prevent errors for future visualizations. 
+
+*/
+
+Analysis summary:
+
+SELECT 
+	member_casual, rideable_type,
+	DATE(started_at) AS ymd,
+	SUM(ROUND(duration, 2)) AS sum_d,
+	AVG(ROUND(duration, 2)) AS avg_d,
+	MAX(ROUND(duration, 2)) AS max_d,
+	MIN(ROUND(duration, 2)) AS min_d,
+	COUNT(*) AS TPD
+FROM td
+WHERE duration > 0 
+GROUP BY member_casual, rideable_type, ymd
+##This select statement provided data in order to produce six visualizations: Percentage of member vs casual riders, Popularity of bike type, Annual popularity of bike types, Annual trip duration per rider type, Weekly popularity of rider types, Annual trips per month. 
+
+SELECT
+	start_station_name, COUNT(start_station_name) AS start_count,
+	end_station_name, COUNT(end_station_name) AS end_count,
+	DATE(started_at) AS ymd
+FROM td
+WHERE member_casual = "member"
+GROUP BY start_station_name
+ORDER BY COUNT(*) DESC;
+##This provided the popularity of member stations. 
+
+SELECT
+	start_station_name, COUNT(start_station_name) AS start_count,
+	end_station_name, COUNT(end_station_name) AS end_count,
+	DATE(started_at) AS ymd
+FROM td
+WHERE member_casual = "member"
+GROUP BY start_station_name
+ORDER BY COUNT(*) DESC;
+##This provided the popularity of casual rider stations. 
+
+##It was determined that no member riders purchased a docked bike. Ran an additional SELECT statement to determine the validity of these results:
+
+SELECT
+	member_casual, rideable_type, COUNT(*)
+FROM td
+WHERE member_casual = "member" AND rideable_type = "docked_bike";
+##This resulted in zero members who rented a docked bike. This would need to be addressed as to why the data has no members who rented a docked bike. Continued with the analysis since this information could not be addressed. 
+
+##Additional queries were made to determine the accuracy of the three previous SELECT statements. 
+
+SELECT day_of_week, COUNT(*)
+FROM dt
+GROUP BY day_of_week;
+##Weekday popularity of all customers. 
+
+SELECT day_of_week,
+COUNT(CASE WHEN member_casual = "member" THEN 1 END) AS member_count,
+COUNT(CASE WHEN member_casual = "casual" THEN 1 END) AS casual_count
+FROM dt
+GROUP BY day_of_week;
+
+SELECT SUM(CASE WHEN member_casual = "member" THEN 1 END) AS members,
+       SUM(CASE WHEN member_casual = "casual" THEN 1 END) AS casual,
+       SUM(CASE WHEN member_casual IS NOT NULL OR member_casual IS NULL THEN 1 ELSE 0
+       END) AS total_count
+FROM dt;
+##Most popular start and end stations
+
+##Additional SELECT statements were made to confirm the query results. 
+
+SELECT member_casual,
+	SUM(CASE WHEN rideable_type = "electric_bike" THEN 1 END) AS electric,
+	SUM(CASE WHEN rideable_type = "classic_bike" THEN 1 END) AS classic,
+	SUM(CASE WHEN rideable_type = "docked_bike" THEN 1 END) AS docked
+	FROM dt;
+	GROUP BY member_casual
+##member vs casual showing the number of bike types that are used
+
+ SELECT day_of_week,
+	SUM(CASE WHEN rideable_type = "electric_bike" THEN 1 END) AS electric,
+	SUM(CASE WHEN rideable_type = "classic_bike" THEN 1 END) AS classic,
+	SUM(CASE WHEN rideable_type = "docked_bike" THEN 1 END) AS docked
+	FROM dt;
+	GROUP BY day_of_week
+##Days of the week showing popularity of bike type.
+
+SELECT member_casual, AVG(TIME(duration))
+FROM dt
+GROUP BY member_casual;
+##Average duration member vs casual
+
+SELECT day_of_week, AVG(TIME(duration)) AS avg_member_duration
+FROM dt
+WHERE member_casual = "member"
+GROUP BY day_of_week;
+##Average duration of members for each day of the week
+
+SELECT day_of_week, AVG(TIME(duration)) AS avg_casual_duration
+FROM dt
+WHERE member_casual = "casual"
+GROUP BY day_of_week;
+##Average duration of casual users for each day of the week
+
+SELECT day_of_week,
+       AVG(CASE WHEN member_casual = 'member' THEN TIME(duration) END) AS avg_member_duration,
+       AVG(CASE WHEN member_casual = 'casual' THEN TIME(duration) END) AS avg_casual_duration
+FROM dt
+GROUP BY day_of_week
+##Avg duration of both member and casual for the week
+
+SELECT rideable_type, AVG(TIME(duration)) AS avg_rental_length
+FROM dt
+GROUP BY rideable_type			
+##Average rental length by bike type 
+
+*/
+
+Visualizations and key findings: 
+
+•	Casual riders make up approximately 40% of all users
+•	Casual riders prefer electric bikes
+•	The highest bike usage for casual riders is between May and October
+•	Casual riders rent bikes for over ten minutes longer on average
+•	Weekends are most popular for casual riders
+•	Streeter Dr & Grand Ave is the most popular start station for casual riders
+•	DuSable Lake Shore is the most popular end station for casual riders
+
+Recommendations based on the analysis:
+
+•	Email discounted memberships in March and April before peak season.
+•	Incentivize memberships by highlighting electric bike benefits for members only. 
+•	Focus advertising on weekends and at the most popular casual rider stations. 
+•	Explore off season discounts.
+•	Advertise in top member stations for “sign up a friend” discounts. 
